@@ -258,7 +258,7 @@ def save_image_to_format(image, format_name):
         return buf.getvalue()
 
 def main():
-    st.set_page_config(page_title="Colorblind Simulator", layout="wide")
+    st.set_page_config(page_title="Addie's Colorblind Simulator", layout="wide")
     
     st.title("Colorblind Simulator")
     st.write("""
