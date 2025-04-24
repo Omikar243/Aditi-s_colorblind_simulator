@@ -186,7 +186,7 @@ def create_color_wheel(size=400) -> Image.Image:
 
 def main():
     st.set_page_config(page_title="Colorblind Simulator", layout="wide")
-    st.title("Colorblind Simulator")
+    st.title("Aditi's Colorblind Simulator")
     st.write("""
     Upload an image and see how it appears under different color vision deficiencies.
     You can also download the result in several formats.
