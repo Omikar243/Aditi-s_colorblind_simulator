@@ -19,6 +19,21 @@ except ImportError:
     HEIC_SUPPORT = False
 
 
+def is_running_on_server():
+    """Detect if running on a server environment vs localhost"""
+    # Check common server environment indicators
+    server_indicators = [
+        os.environ.get('STREAMLIT_SERVER_PORT'),
+        os.environ.get('PORT'),
+        os.environ.get('HEROKU_APP_NAME'),
+        os.environ.get('RAILWAY_ENVIRONMENT'),
+        os.environ.get('VERCEL'),
+        'streamlit.io' in os.environ.get('STREAMLIT_SERVER_ADDRESS', ''),
+        'herokuapp.com' in os.environ.get('STREAMLIT_SERVER_ADDRESS', ''),
+    ]
+    return any(server_indicators) or not os.path.exists('/dev/video0')
+
+
 def convert_heic_to_pil(heic_file):
     """Convert HEIC image to PIL Image using pillow-heif"""
     if not HEIC_SUPPORT:
@@ -361,6 +376,9 @@ def main():
     if not HEIC_SUPPORT:
         st.warning("Install `pillow-heif` for HEIC support: `pip install pillow-heif`")
 
+    # Check if running on server
+    on_server = is_running_on_server()
+
     # Main dashboard controls
     st.header("Controls")
     
@@ -387,11 +405,19 @@ def main():
             severity = 0.0
     
     with col3:
-        # Input method selection
+        # Input method selection - disable webcam on server
+        input_options = ["Upload Image", "Upload Video"]
+        if not on_server:
+            input_options.append("Live Webcam")
+        
         input_method = st.selectbox(
             "Choose input method:",
-            ["Upload Image", "Upload Video", "Live Webcam"]
+            input_options
         )
+    
+    # Show webcam unavailability message if on server
+    if on_server and "Live Webcam" not in input_options:
+        st.info("📷 Live webcam is only available when running locally. Use 'Upload Image' or 'Upload Video' instead.")
     
     all_view = st.checkbox("Show all types side by side")
 
@@ -530,6 +556,8 @@ def main():
 
     elif input_method == "Live Webcam":
         st.subheader("Live Webcam Simulation")
+        
+        # This section will only run on localhost since we filtered the option on server
         st.info("Click 'Start Webcam' to begin live color blindness simulation.")
         
         if all_view:
