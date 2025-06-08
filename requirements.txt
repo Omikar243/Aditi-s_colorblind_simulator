@@ -5,8 +5,6 @@ Pillow>=9.0.0
 pillow-heif>=0.10.0
 matplotlib>=3.5.0
 
-# For browser-based live streaming
-streamlit-webrtc>=0.63.0
-
-# PyAV, required by streamlit-webrtc
+# Browser-based live video streaming
+streamlit-webrtc==0.62.4
 av>=10.0.0
