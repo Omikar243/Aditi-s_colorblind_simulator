@@ -10,14 +10,6 @@ import matplotlib.pyplot as plt
 import threading
 import queue
 
-# WebRTC imports
-try:
-    from streamlit_webrtc import webrtc_streamer, RTCConfiguration, VideoTransformerBase, WebRtcMode
-    import av
-    WEBRTC_SUPPORT = True
-except ImportError:
-    WEBRTC_SUPPORT = False
-
 # Check if pillow_heif is installed for HEIC support
 try:
     import pillow_heif
@@ -358,71 +350,6 @@ def process_video_file_all_types(video_path: str, output_paths: dict):
     progress_bar.empty()
 
 
-# WebRTC Configuration
-RTC_CONFIGURATION = RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]})
-
-class ColorblindVideoTransformer(VideoTransformerBase):
-    """Video transformer for WebRTC colorblind simulation"""
-    
-    def __init__(self):
-        self.mode = "Normal Vision"
-        self.severity = 1.0
-        self.all_view = False
-    
-    def update_settings(self, mode: str, severity: float, all_view: bool):
-        self.mode = mode
-        self.severity = severity
-        self.all_view = all_view
-    
-    def transform(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-        
-        if self.all_view:
-            # Create a composite image with all vision types
-            vision_types = ["Normal Vision", "Protanopia", "Deuteranopia", "Tritanopia", "Achromatopsia"]
-            processed_frames = []
-            
-            for vt in vision_types:
-                if vt == "Normal Vision":
-                    processed_frames.append(img)
-                else:
-                    processed_frames.append(process_frame_cv2(img, vt, 1.0))
-            
-            # Create a grid layout (2x3 or 3x2 depending on aspect ratio)
-            h, w = img.shape[:2]
-            
-            # Resize each frame to fit in grid
-            target_w, target_h = w // 3, h // 2
-            resized_frames = []
-            for frame_bgr in processed_frames:
-                resized = cv2.resize(frame_bgr, (target_w, target_h))
-                resized_frames.append(resized)
-            
-            # Create composite image
-            composite = np.zeros((h, w, 3), dtype=np.uint8)
-            
-            # Arrange in 2 rows, 3 columns (with one empty slot)
-            positions = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1)]
-            
-            for i, (row, col) in enumerate(positions):
-                if i < len(resized_frames):
-                    y_start = row * target_h
-                    y_end = y_start + target_h
-                    x_start = col * target_w
-                    x_end = x_start + target_w
-                    composite[y_start:y_end, x_start:x_end] = resized_frames[i]
-            
-            return av.VideoFrame.from_ndarray(composite, format="bgr24")
-        else:
-            # Single mode processing
-            if self.mode == "Normal Vision":
-                processed_img = img
-            else:
-                processed_img = process_frame_cv2(img, self.mode, self.severity)
-            
-            return av.VideoFrame.from_ndarray(processed_img, format="bgr24")
-
-
 def main():
     st.set_page_config(page_title="Enhanced Colorblind Simulator", layout="wide")
     st.title("Aditi's Enhanced Colorblind Simulator")
@@ -433,9 +360,6 @@ def main():
 
     if not HEIC_SUPPORT:
         st.warning("Install `pillow-heif` for HEIC support: `pip install pillow-heif`")
-    
-    if not WEBRTC_SUPPORT:
-        st.warning("Install `streamlit-webrtc` for enhanced webcam experience: `pip install streamlit-webrtc`")
 
     # Main dashboard controls
     st.header("Controls")
@@ -464,10 +388,10 @@ def main():
     
     with col3:
         # Input method selection
-        input_methods = ["Upload Image", "Upload Video", "Live Webcam"]
-        if WEBRTC_SUPPORT:
-            input_methods.append("WebRTC Live Stream")
-        input_method = st.selectbox("Choose input method:", input_methods)
+        input_method = st.selectbox(
+            "Choose input method:",
+            ["Upload Image", "Upload Video", "Live Webcam"]
+        )
     
     all_view = st.checkbox("Show all types side by side")
 
@@ -604,32 +528,6 @@ def main():
                         except:
                             pass
 
-    elif input_method == "WebRTC Live Stream" and WEBRTC_SUPPORT:
-        st.subheader("WebRTC Live Stream Simulation")
-        st.info("This provides a continuous live feed with real-time color blindness simulation.")
-        
-        # Initialize video transformer factory function
-        def video_transformer_factory():
-            if not hasattr(st.session_state, 'video_transformer'):
-                st.session_state.video_transformer = ColorblindVideoTransformer()
-            st.session_state.video_transformer.update_settings(mode, severity, all_view)
-            return st.session_state.video_transformer
-        
-        # WebRTC streamer
-        ctx = webrtc_streamer(
-            key="colorblind-simulator",
-            mode=WebRtcMode.SENDRECV,
-            rtc_configuration=RTC_CONFIGURATION,
-            video_transformer_factory=lambda: st.session_state.video_transformer,
-            media_stream_constraints={"video": True, "audio": False},
-            async_processing=True,
-        )
-        
-        if all_view:
-            st.info("📺 All vision types are displayed in a grid layout in the video stream above.")
-        else:
-            st.info(f"📺 Currently showing: {mode} at {int(severity*100)}% severity")
-
     elif input_method == "Live Webcam":
         st.subheader("Live Webcam Simulation")
         st.info("Click 'Start Webcam' to begin live color blindness simulation.")
@@ -716,7 +614,7 @@ def main():
                         frame_count += 1
                         time.sleep(0.033)  # ~30 FPS
                     
-                cap.release()
+                    cap.release()
                     
             except Exception as e:
                 st.error(f"Webcam error: {e}")
