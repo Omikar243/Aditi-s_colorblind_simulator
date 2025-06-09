@@ -6,5 +6,4 @@ pillow-heif>=0.10.0
 matplotlib>=3.5.0
 
 # Browser-based live video streaming
-streamlit-webrtc==0.62.4
-av>=10.0.0
+
