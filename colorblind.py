@@ -9,6 +9,7 @@ import time
 import matplotlib.pyplot as plt
 import threading
 import queue
+import gc
 
 # Check if pillow_heif is installed for HEIC support
 try:
@@ -215,6 +216,42 @@ def process_image(image: Image.Image, mode: str, severity: float = 1.0) -> Image
         return apply_achromatopsia(image, severity)
     else:
         return image
+
+
+def process_image_tiled(image: Image.Image, mode: str, severity: float = 1.0, tile_size: int = 1024) -> Image.Image:
+    """
+    Process large images by breaking them into tiles to save memory.
+    """
+    if mode not in ["Protanopia", "Deuteranopia", "Tritanopia", "Achromatopsia"]:
+        return image
+
+    w, h = image.size
+    # Create a new image for the result
+    result_img = Image.new("RGB", (w, h))
+    
+    # Process in tiles
+    for y in range(0, h, tile_size):
+        for x in range(0, w, tile_size):
+            # Define tile box
+            box = (x, y, min(x + tile_size, w), min(y + tile_size, h))
+            
+            # Crop tile
+            tile = image.crop(box)
+            
+            # Process tile
+            processed_tile = process_image(tile, mode, severity)
+            
+            # Paste processed tile
+            result_img.paste(processed_tile, box)
+            
+            # Explicitly free memory
+            del tile
+            del processed_tile
+            
+        # Optional: Force garbage collection after each row to be safe
+        gc.collect()
+            
+    return result_img
 
 
 def process_frame_cv2(frame: np.ndarray, mode: str, severity: float = 1.0) -> np.ndarray:
@@ -435,7 +472,7 @@ def main():
                 data = save_image_to_format(im, fmt)
                 st.download_button(f"Download {title}", data, f"{title.lower()}.{fmt.lower()}", f"image/{fmt.lower()}")
         else:
-            out = process_image(img, mode, severity)
+            out = process_image_tiled(img, mode, severity)
             c1, c2 = st.columns(2)
             with c1:
                 st.subheader("Original")
@@ -458,7 +495,16 @@ def main():
             # Save uploaded video temporarily if not already saved in session
             if "input_video_path" not in st.session_state or st.session_state.get("current_video_key") != file_key:
                 temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-                temp_input.write(uploaded_video.read())
+                
+                # Chunked write to save memory
+                CHUNK_SIZE = 8 * 1024 * 1024  # 8MB chunks
+                uploaded_video.seek(0)
+                while True:
+                    chunk = uploaded_video.read(CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    temp_input.write(chunk)
+                
                 temp_input.close()
                 st.session_state.input_video_path = temp_input.name
                 st.session_state.current_video_key = file_key
