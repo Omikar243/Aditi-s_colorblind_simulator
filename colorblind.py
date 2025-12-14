@@ -284,7 +284,7 @@ def process_video_file(video_path: str, output_path: str, mode: str, severity: f
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
     # Setup video writer
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
     
     progress_bar = st.progress(0)
@@ -319,7 +319,7 @@ def process_video_file_all_types(video_path: str, output_paths: dict):
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
     # Setup video writers
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
     writers = {}
     for mode, path in output_paths.items():
         writers[mode] = cv2.VideoWriter(path, fourcc, fps, (width, height))
@@ -452,30 +452,32 @@ def main():
         uploaded_video = st.file_uploader("Upload video file", type=["mp4", "avi", "mov", "mkv"])
         
         if uploaded_video is not None:
-            # Save uploaded video temporarily
-            temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-            temp_input.write(uploaded_video.read())
-            temp_input.close()
+            # Generate a unique key for the uploaded file
+            file_key = f"video_{uploaded_video.name}_{uploaded_video.size}"
             
+            # Save uploaded video temporarily if not already saved in session
+            if "input_video_path" not in st.session_state or st.session_state.get("current_video_key") != file_key:
+                temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                temp_input.write(uploaded_video.read())
+                temp_input.close()
+                st.session_state.input_video_path = temp_input.name
+                st.session_state.current_video_key = file_key
+                # Clear previous outputs when new video is uploaded
+                st.session_state.processed_videos = {}
+            
+            input_path = st.session_state.input_video_path
+
             if all_view:
-                # Create output paths for all types
-                temp_outputs = {}
-                vision_types_for_video = ["Normal", "Protanopia", "Deuteranopia", "Tritanopia", "Achromatopsia"]
-                for vtype in vision_types_for_video:
-                    temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-                    temp_output.close()
-                    temp_outputs[vtype] = temp_output.name
+                # Key for this specific processing mode
+                process_key = "all_types"
                 
-                if st.button("Process Video (All Types)"):
-                    st.info("Processing video for all vision types... This may take a while depending on video length.")
-                    try:
-                        process_video_file_all_types(temp_input.name, temp_outputs)
-                        
-                        st.success("Videos processed successfully!")
-                        
-                        # Display and provide downloads for all types
-                        for vtype, output_path in temp_outputs.items():
-                            st.subheader(f"{vtype} Vision")
+                if process_key in st.session_state.get("processed_videos", {}):
+                    # Show cached results
+                    st.success("Videos processed successfully! (Loaded from cache)")
+                    outputs = st.session_state.processed_videos[process_key]
+                    for vtype, output_path in outputs.items():
+                        st.subheader(f"{vtype} Vision")
+                        if os.path.exists(output_path):
                             with open(output_path, "rb") as f:
                                 video_bytes = f.read()
                             st.video(video_bytes)
@@ -486,31 +488,57 @@ def main():
                                 "video/mp4",
                                 key=f"download_{vtype}"
                             )
+                        else:
+                            st.warning(f"Video file for {vtype} not found. Please re-process.")
+                            
+                    if st.button("Process Again"):
+                        # Clear cache for this key to force re-processing
+                        del st.session_state.processed_videos[process_key]
+                        st.rerun()
+
+                elif st.button("Process Video (All Types)"):
+                    st.info("Processing video for all vision types... This may take a while depending on video length.")
+                    
+                    # Create output paths
+                    temp_outputs = {}
+                    vision_types_for_video = ["Normal", "Protanopia", "Deuteranopia", "Tritanopia", "Achromatopsia"]
+                    for vtype in vision_types_for_video:
+                        temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                        temp_output.close()
+                        temp_outputs[vtype] = temp_output.name
+                    
+                    try:
+                        process_video_file_all_types(input_path, temp_outputs)
+                        
+                        # Initialize cache if needed
+                        if "processed_videos" not in st.session_state:
+                            st.session_state.processed_videos = {}
+                        
+                        # Store in session state
+                        st.session_state.processed_videos[process_key] = temp_outputs
+                        st.rerun()
+                        
                     except Exception as e:
                         st.error(f"Error processing video: {e}")
-                    finally:
-                        # Clean up temporary files
-                        try:
-                            os.unlink(temp_input.name)
-                            for output_path in temp_outputs.values():
-                                os.unlink(output_path)
-                        except:
-                            pass
+                        # Cleanup on failure
+                        for path in temp_outputs.values():
+                            try:
+                                os.unlink(path)
+                            except:
+                                pass
+
             else:
-                # Create output path
-                temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-                temp_output.close()
+                # Single mode processing
+                process_key = f"single_{mode}_{severity}"
                 
-                if st.button("Process Video"):
-                    st.info("Processing video... This may take a while depending on video length.")
-                    try:
-                        process_video_file(temp_input.name, temp_output.name, mode, severity)
-                        
-                        # Read processed video
-                        with open(temp_output.name, "rb") as f:
+                if process_key in st.session_state.get("processed_videos", {}):
+                    # Show cached result
+                    st.success("Video processed successfully! (Loaded from cache)")
+                    output_path = st.session_state.processed_videos[process_key]
+                    
+                    if os.path.exists(output_path):
+                        with open(output_path, "rb") as f:
                             video_bytes = f.read()
-                        
-                        st.success("Video processed successfully!")
                         st.video(video_bytes)
                         st.download_button(
                             "Download Processed Video",
@@ -518,12 +546,30 @@ def main():
                             f"colorblind_simulation_{mode.lower()}.mp4",
                             "video/mp4"
                         )
+                    else:
+                        st.warning("Video file not found. Please re-process.")
+
+                    if st.button("Process Again"):
+                        del st.session_state.processed_videos[process_key]
+                        st.rerun()
+                
+                elif st.button("Process Video"):
+                    st.info("Processing video... This may take a while depending on video length.")
+                    temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                    temp_output.close()
+                    
+                    try:
+                        process_video_file(input_path, temp_output.name, mode, severity)
+                        
+                        if "processed_videos" not in st.session_state:
+                            st.session_state.processed_videos = {}
+                        
+                        st.session_state.processed_videos[process_key] = temp_output.name
+                        st.rerun()
+                        
                     except Exception as e:
                         st.error(f"Error processing video: {e}")
-                    finally:
-                        # Clean up temporary files
                         try:
-                            os.unlink(temp_input.name)
                             os.unlink(temp_output.name)
                         except:
                             pass
