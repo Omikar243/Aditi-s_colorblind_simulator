@@ -450,27 +450,92 @@ def main():
             img = create_color_wheel()
 
         if all_view:
-            st.subheader("All Vision Types")
-            imgs = {
-                "Normal": img,
-                "Protanopia": process_image(img, "Protanopia", 1.0),
-                "Deuteranopia": process_image(img, "Deuteranopia", 1.0),
-                "Tritanopia": process_image(img, "Tritanopia", 1.0),
-                "Achromatopsia": process_image(img, "Achromatopsia", 1.0)
-            }
+            st.subheader("Previews (Low Resolution)")
+            # Create a thumbnail for preview to save memory/time on display
+            img_preview = img.copy()
+            img_preview.thumbnail((800, 800))
             
-            # Display in grid
+            vision_types_list = ["Normal", "Protanopia", "Deuteranopia", "Tritanopia", "Achromatopsia"]
+            
+            # Display Previews in Grid
             cols = st.columns(3)
-            for i, (title, im) in enumerate(imgs.items()):
+            for i, vtype in enumerate(vision_types_list):
                 with cols[i % 3]:
-                    st.write(title)
-                    st.image(im, width="stretch")
+                    st.write(f"**{vtype}**")
+                    if vtype == "Normal":
+                        st.image(img_preview, width="stretch")
+                    else:
+                        # Fast processing on small preview
+                        # Note: process_image handles "Normal" implicitly but we handle it explicitly above for clarity
+                        prev_out = process_image(img_preview, vtype, 1.0) 
+                        st.image(prev_out, width="stretch")
             
             st.markdown("---")
-            for title, im in imgs.items():
-                fmt = st.selectbox(f"Format for {title}", formats, key=title)
-                data = save_image_to_format(im, fmt)
-                st.download_button(f"Download {title}", data, f"{title.lower()}.{fmt.lower()}", f"image/{fmt.lower()}")
+            st.subheader("High-Resolution Downloads")
+            st.info("Generate full-resolution files only when you need them to save memory.")
+
+            # Unique key for this image upload
+            # We use name + size + modification time if available, or just name+size
+            img_key = f"{uploaded.name}_{uploaded.size}"
+            
+            # Container for download controls
+            for vtype in vision_types_list:
+                col_d1, col_d2, col_d3 = st.columns([2, 2, 2])
+                with col_d1:
+                    st.write(f"**{vtype}**")
+                
+                cache_key = f"full_res_{img_key}_{vtype}"
+                
+                with col_d2:
+                    # Format selection (independent for each generation)
+                    sel_fmt = st.selectbox("", formats, key=f"fmt_sel_{cache_key}", label_visibility="collapsed")
+
+                with col_d3:
+                    if cache_key in st.session_state:
+                        # If cached, show Download & Clear
+                        data = st.session_state[cache_key]
+                        # We stored the format in the key's partner metadata or just assume user selects same?
+                        # Better to store the format used for generation, or just regenerate if changed. 
+                        # For simplicity, if cached, we download what's cached.
+                        cached_fmt = st.session_state.get(f"fmt_{cache_key}", "PNG")
+                        
+                        st.download_button(
+                            f"⬇️ Download", 
+                            data, 
+                            f"{vtype.lower()}.{cached_fmt.lower()}", 
+                            f"image/{cached_fmt.lower()}",
+                            key=f"btn_dl_{cache_key}"
+                        )
+                        if st.button("🗑️ Clear", key=f"btn_clr_{cache_key}"):
+                            del st.session_state[cache_key]
+                            del st.session_state[f"fmt_{cache_key}"]
+                            st.rerun()
+                    else:
+                        # If not cached, show Generate
+                        if st.button(f"⚙️ Generate", key=f"btn_gen_{cache_key}"):
+                            with st.spinner(f"Processing full resolution {vtype}..."):
+                                try:
+                                    if vtype == "Normal":
+                                        full_out = img
+                                    else:
+                                        # Use tiled processing for full res
+                                        full_out = process_image_tiled(img, vtype, 1.0)
+                                    
+                                    # Convert to bytes
+                                    out_bytes = save_image_to_format(full_out, sel_fmt)
+                                    
+                                    # Cache
+                                    st.session_state[cache_key] = out_bytes
+                                    st.session_state[f"fmt_{cache_key}"] = sel_fmt
+                                    
+                                    # Cleanup memory immediately
+                                    if vtype != "Normal":
+                                        del full_out
+                                    gc.collect()
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
+
         else:
             out = process_image_tiled(img, mode, severity)
             c1, c2 = st.columns(2)
