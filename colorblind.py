@@ -427,7 +427,7 @@ def main():
             for i, (title, im) in enumerate(imgs.items()):
                 with cols[i % 3]:
                     st.write(title)
-                    st.image(im, use_container_width=True)
+                    st.image(im, width="stretch")
             
             st.markdown("---")
             for title, im in imgs.items():
@@ -439,10 +439,10 @@ def main():
             c1, c2 = st.columns(2)
             with c1:
                 st.subheader("Original")
-                st.image(img, use_container_width=True)
+                st.image(img, width="stretch")
             with c2:
                 st.subheader(f"{mode} ({int(severity*100)}%)")
-                st.image(out, use_container_width=True)
+                st.image(out, width="stretch")
 
             fmt = st.selectbox("Download format", formats)
             data = save_image_to_format(out, fmt)
@@ -598,7 +598,7 @@ def main():
                                     processed_frame = process_frame_cv2(frame, vtype, 1.0)
                                     display_frame = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
                                 
-                                placeholders[vtype].image(display_frame, channels="RGB", use_container_width=True)
+                                placeholders[vtype].image(display_frame, channels="RGB", width="stretch")
                         else:
                             # Process frame
                             processed_frame = process_frame_cv2(frame, mode, severity)
@@ -608,8 +608,8 @@ def main():
                             processed_rgb = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
                             
                             # Display frames
-                            original_placeholder.image(original_rgb, channels="RGB", use_container_width=True)
-                            processed_placeholder.image(processed_rgb, channels="RGB", use_container_width=True)
+                            original_placeholder.image(original_rgb, channels="RGB", width="stretch")
+                            processed_placeholder.image(processed_rgb, channels="RGB", width="stretch")
                         
                         frame_count += 1
                         time.sleep(0.033)  # ~30 FPS

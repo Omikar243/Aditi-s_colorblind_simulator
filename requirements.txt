@@ -1,9 +1,6 @@
-streamlit>=1.22.0
-numpy>=1.24.3
-opencv-python-headless>=4.10.1
-Pillow>=9.0.0
-pillow-heif>=0.10.0
-matplotlib>=3.5.0
-
-# Browser-based live video streaming
-
+streamlit>=1.52.1
+numpy>=1.26.0
+opencv-python-headless>=4.10.0.84
+Pillow>=10.3.0
+pillow-heif>=0.16.0
+matplotlib>=3.9.0
