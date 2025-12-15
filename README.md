@@ -55,4 +55,4 @@ The app uses color transformation matrices to simulate how images would appear t
 ## Deployment
 
 This app can be deployed on Streamlit Sharing or any other platform that supports Streamlit applications.
-Link: https://colorblindsimulator-s8wtrsjhfvq8tculmhs2fa.streamlit.app/
+Link: [https://aditi-scolorblindsimulator-ijncekc4yn7lcon9qtgtzp.streamlit.app/](https://aditi-scolorblindsimulator-ijncekc4yn7lcon9qtgtzp.streamlit.app/)
